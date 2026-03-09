@@ -7,14 +7,48 @@ let calYear  = new Date().getFullYear();
 let calMonth = new Date().getMonth();
 let notifInterval = null;
 
+// ===== STORAGE =====
+function saveData() {
+  try {
+    localStorage.setItem('cm_certificates', JSON.stringify(certificates));
+    localStorage.setItem('cm_meetings',     JSON.stringify(meetings));
+  } catch(e) { console.warn('Storage save failed', e); }
+}
+
+function loadData() {
+  try {
+    const c = localStorage.getItem('cm_certificates');
+    const m = localStorage.getItem('cm_meetings');
+    if (c) certificates = JSON.parse(c);
+    if (m) meetings     = JSON.parse(m);
+  } catch(e) { console.warn('Storage load failed', e); }
+}
+
+function resetData() {
+  if (!confirm('âš ï¸ This will permanently delete ALL certificates and meetings. Are you sure?')) return;
+  if (!confirm('Last chance â€” this cannot be undone. Reset everything?')) return;
+  certificates = [];
+  meetings     = [];
+  localStorage.removeItem('cm_certificates');
+  localStorage.removeItem('cm_meetings');
+  renderTable();
+  renderMeetingsTable();
+  updateStats();
+  if (document.getElementById('page-calendar').classList.contains('active')) renderCalendar();
+  showToast('All data has been reset!', 'error');
+}
+
 // ===== AUTH =====
 function login() {
   if (document.getElementById('passwordInput').value === PASSWORD) {
+    loadData();
     document.getElementById('loginPage').style.display = 'none';
     document.getElementById('mainPage').style.display = 'block';
     document.getElementById('issuedDate').valueAsDate = new Date();
     calYear  = new Date().getFullYear();
     calMonth = new Date().getMonth();
+    renderTable();
+    renderMeetingsTable();
     updateStats();
     requestNotifPermission();
     startNotifChecker();
@@ -77,6 +111,7 @@ function addCertificate() {
 
   const doSave = (imageData) => {
     certificates.push({ id: Date.now(), certNumber, supplier, issuedDate, expiryDate, image: imageData, notified: false });
+    saveData();
     renderTable();
     updateStats();
     document.getElementById('certNumber').value = '';
@@ -188,6 +223,7 @@ function viewCert(id) {
 function deleteCert(id) {
   if (confirm('Delete this certificate?')) {
     certificates = certificates.filter(c => c.id !== id);
+    saveData();
     renderTable(); updateStats();
     if (document.getElementById('page-calendar').classList.contains('active')) renderCalendar();
     showToast('Deleted!', 'success');
@@ -209,6 +245,7 @@ function addMeeting() {
   if (!datetime) { showToast('Please select a date and time!', 'error'); return; }
 
   meetings.push({ id:Date.now(), title, datetime, location, notes, color, notified:false });
+  saveData();
   renderMeetingsTable();
   updateStats();
   document.getElementById('meetingTitle').value    = '';
@@ -246,8 +283,8 @@ function renderMeetingsTable() {
       </div></td>
       <td>${formatDateTime(m.datetime)}</td>
       <td>${badge}</td>
-      <td>${m.location||'<span style="color:var(--color-text-tertiary)">—</span>'}</td>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.notes||'<span style="color:var(--color-text-tertiary)">—</span>'}</td>
+      <td>${m.location||'<span style="color:var(--color-text-tertiary)">â€”</span>'}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.notes||'<span style="color:var(--color-text-tertiary)">â€”</span>'}</td>
       <td><button class="action-btn btn-delete" onclick="deleteMeeting(${m.id})">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="3 6 5 6 21 6"></polyline>
@@ -260,6 +297,7 @@ function renderMeetingsTable() {
 function deleteMeeting(id) {
   if (confirm('Delete this meeting?')) {
     meetings = meetings.filter(m => m.id !== id);
+    saveData();
     renderMeetingsTable(); updateStats();
     if (document.getElementById('page-calendar').classList.contains('active')) renderCalendar();
     showToast('Meeting deleted!', 'success');
@@ -272,23 +310,23 @@ function viewReminders() {
   let html = '';
   const certAlerts = certificates.filter(c => getStatus(c.expiryDate).cls !== 'valid');
   if (certAlerts.length) {
-    html += '<div class="reminder-section-label">📄 Certificate Alerts</div>';
+    html += '<div class="reminder-section-label">ðŸ“„ Certificate Alerts</div>';
     html += certAlerts.map(c => {
       const s = getStatus(c.expiryDate);
-      return `<div class="reminder-item reminder-${s.cls}"><strong>${c.certNumber}</strong><span>${c.supplier} — Expires: ${formatDate(c.expiryDate)}</span></div>`;
+      return `<div class="reminder-item reminder-${s.cls}"><strong>${c.certNumber}</strong><span>${c.supplier} â€” Expires: ${formatDate(c.expiryDate)}</span></div>`;
     }).join('');
   }
   const upcoming = meetings
     .filter(m => { const mt=new Date(m.datetime); return mt>=now && (mt-now)<=7*24*60*60*1000; })
     .sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
   if (upcoming.length) {
-    html += `<div class="reminder-section-label" style="margin-top:${certAlerts.length?'20px':'0'}">🗓 Upcoming Meetings (Next 7 Days)</div>`;
+    html += `<div class="reminder-section-label" style="margin-top:${certAlerts.length?'20px':'0'}">ðŸ—“ Upcoming Meetings (Next 7 Days)</div>`;
     html += upcoming.map(m => `<div class="reminder-item reminder-meeting" style="border-left-color:${m.color};background:${m.color}18">
       <strong style="color:${m.color}">${m.title}</strong>
-      <span>${formatDateTime(m.datetime)}${m.location?' · 📍 '+m.location:''}</span>
+      <span>${formatDateTime(m.datetime)}${m.location?' Â· ðŸ“ '+m.location:''}</span>
     </div>`).join('');
   }
-  if (!html) html = '<p style="text-align:center;padding:40px;color:var(--color-text-secondary)">All clear! ✅</p>';
+  if (!html) html = '<p style="text-align:center;padding:40px;color:var(--color-text-secondary)">All clear! âœ…</p>';
   document.getElementById('reminderContent').innerHTML = html;
   document.getElementById('reminderModal').style.display = 'block';
 }
@@ -308,7 +346,7 @@ function checkNotifications() {
     if (m.notified) return;
     const diff = new Date(m.datetime) - now;
     if (diff > 0 && diff <= 15*60*1000) {
-      new Notification('🗓 Meeting Starting Soon', { body: `"${m.title}" starts in ~${Math.round(diff/60000)} min${m.location?'\n📍 '+m.location:''}` });
+      new Notification('ðŸ—“ Meeting Starting Soon', { body: `"${m.title}" starts in ~${Math.round(diff/60000)} min${m.location?'\nðŸ“ '+m.location:''}` });
       m.notified = true;
     }
   });
@@ -317,7 +355,7 @@ function checkNotifications() {
     const expiry = new Date(c.expiryDate); expiry.setHours(0,0,0,0);
     const today  = new Date(); today.setHours(0,0,0,0);
     if (expiry.getTime() === today.getTime()) {
-      new Notification('⚠️ Certificate Expiring Today', { body: `${c.certNumber} (${c.supplier}) expires today!` });
+      new Notification('âš ï¸ Certificate Expiring Today', { body: `${c.certNumber} (${c.supplier}) expires today!` });
       c.notified = true;
     }
   });
@@ -436,13 +474,13 @@ function renderCalendar() {
         pill.className = 'day-pill';
         if (p.type==='meeting') {
           pill.style.cssText=`background:${p.item.color}22;color:${p.item.color};border:1px solid ${p.item.color}55`;
-          pill.textContent = '🗓 '+p.item.title;
+          pill.textContent = 'ðŸ—“ '+p.item.title;
         } else if (p.type==='issued') {
           pill.classList.add('pill-issued');
-          pill.textContent = '↑ '+p.item.certNumber;
+          pill.textContent = 'â†‘ '+p.item.certNumber;
         } else {
           pill.classList.add('pill-'+p.cls);
-          pill.textContent = '✕ '+p.item.certNumber;
+          pill.textContent = 'âœ• '+p.item.certNumber;
         }
         dots.appendChild(pill);
       });
@@ -468,17 +506,17 @@ function openCalDetail(ds, data) {
     const c=document.createElement('div');
     c.className='detail-card issued-card';
     c.style.borderLeftColor=m.color;
-    c.innerHTML=`<div class="detail-type" style="color:${m.color}">🗓 Meeting</div>
+    c.innerHTML=`<div class="detail-type" style="color:${m.color}">ðŸ—“ Meeting</div>
       <div class="detail-num">${m.title}</div>
       <div class="detail-sub">${formatDateTime(m.datetime)}</div>
-      ${m.location?`<div class="detail-meta">📍 ${m.location}</div>`:''}
-      ${m.notes?`<div class="detail-meta">📝 ${m.notes}</div>`:''}`;
+      ${m.location?`<div class="detail-meta">ðŸ“ ${m.location}</div>`:''}
+      ${m.notes?`<div class="detail-meta">ðŸ“ ${m.notes}</div>`:''}`;
     grid.appendChild(c);
   });
   data.issued.forEach(cert => {
     const c=document.createElement('div');
     c.className='detail-card issued-card';
-    c.innerHTML=`<div class="detail-type" style="color:var(--color-accent)">📄 Issued</div>
+    c.innerHTML=`<div class="detail-type" style="color:var(--color-accent)">ðŸ“„ Issued</div>
       <div class="detail-num">${cert.certNumber}</div>
       <div class="detail-sub">${cert.supplier}</div>
       <div class="detail-meta">Expires: ${formatDate(cert.expiryDate)}</div>
@@ -488,10 +526,10 @@ function openCalDetail(ds, data) {
   });
   data.expiry.forEach(cert => {
     const s=getStatus(cert.expiryDate);
-    const icons={valid:'✅',expiring:'⚠️',expired:'❌'};
+    const icons={valid:'âœ…',expiring:'âš ï¸',expired:'âŒ'};
     const c=document.createElement('div');
     c.className=`detail-card expiry-card ${s.cls}`;
-    c.innerHTML=`<div class="detail-type">${icons[s.cls]} Expiry — <span class="status-badge status-${s.cls}" style="font-size:10px;padding:2px 8px">${s.text}</span></div>
+    c.innerHTML=`<div class="detail-type">${icons[s.cls]} Expiry â€” <span class="status-badge status-${s.cls}" style="font-size:10px;padding:2px 8px">${s.text}</span></div>
       <div class="detail-num">${cert.certNumber}</div>
       <div class="detail-sub">${cert.supplier}</div>
       <div class="detail-meta">Issued: ${formatDate(cert.issuedDate)}</div>
